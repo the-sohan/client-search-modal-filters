@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Client Search Modal Filters
- * Description: Adds More Filters to the client's selected Directorist Search Modal in Bricks.
- * Version: 1.0.0
+ * Description: Adds a per-element More Filters control to Directorist Search Modal in Bricks, including site-wide headers.
+ * Version: 1.1.0
  * Author: Sovware Support
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -13,15 +13,33 @@ namespace Sovware\ClientSearchModalFilters;
 
 defined( 'ABSPATH' ) || exit;
 
-// Client scope: change these only when moving this customization to another page/element.
-const PAGE_SLUG = 'aaa-brick-test';
-const ELEMENT_ID = 'jlwxvn';
+add_filter( 'bricks/elements/directorist-search-modal/controls', function ( $controls ) {
+    $controls['client_more_filters'] = array(
+        'tab'         => 'content',
+        'group'       => 'button',
+        'label'       => __( 'Show More Filters', 'client-search-modal-filters' ),
+        'type'        => 'select',
+        'options'     => array(
+            'yes' => __( 'Show', 'client-search-modal-filters' ),
+            'no'  => __( 'Hide', 'client-search-modal-filters' ),
+        ),
+        'default'     => 'yes',
+        'placeholder' => __( 'Show (default)', 'client-search-modal-filters' ),
+        'description' => __( 'Applies wherever this element appears, including headers. Requires advanced search fields in Directory Builder.', 'client-search-modal-filters' ),
+    );
+    return $controls;
+} );
 
 add_filter( 'bricks/element/render', __NAMESPACE__ . '\\prepare_modal', 20, 2 );
 
 function prepare_modal( $render, $element ) {
-    if ( ! $render || ! is_page( PAGE_SLUG ) ||
-        'directorist-search-modal' !== $element->name || ELEMENT_ID !== $element->id ) {
+    // Never let a previous element's pending interception affect the next element.
+    remove_filter( 'pre_do_shortcode_tag', __NAMESPACE__ . '\\render_search', 20 );
+    if ( ! $render || 'directorist-search-modal' !== $element->name ) {
+        return $render;
+    }
+    // Default to Show for existing elements when upgrading from the page-scoped version.
+    if ( 'no' === ( $element->settings['client_more_filters'] ?? 'yes' ) ) {
         return $render;
     }
 
@@ -55,7 +73,8 @@ function render_search( $output, $tag, $attributes, $match ) {
 }
 
 add_action( 'wp_enqueue_scripts', function () {
-    if ( ! is_page( PAGE_SLUG ) ) {
+    // Template placement, not the current queried page, determines whether an element renders.
+    if ( ! class_exists( '\\WpWax\\AKFB\\Elements\\TopSearch' ) ) {
         return;
     }
     wp_enqueue_style( 'client-modal-filters', plugins_url( 'assets/filters.css', __FILE__ ), array(), filemtime( __DIR__ . '/assets/filters.css' ) );
